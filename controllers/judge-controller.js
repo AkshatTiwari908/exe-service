@@ -25,7 +25,7 @@ const getDockerCommand = (language, timestamp, codeFile, inputFile, outputFile, 
       return `timeout 3s docker run --rm --memory=256m --cpus=0.5 -v "${BASE_PATH}:/app" python:3.9 bash -c "/usr/bin/time -v python3 /app/${codeFile} < /app/${inputFile} > /app/${outputFile} 2> ${timeLog}"`;
 
     case "cpp":
-      return `docker run --rm --memory=256m --cpus=0.5 -v "/execution-service:/app" gcc:latest bash -c "g++ /app/${codeFile} -o /app/${execFile} && timeout 3s /usr/bin/time -v /app/${execFile} < /app/${inputFile} > /app/${outputFile} 2> ${timeLog}"`;
+      return `docker run --rm --memory=256m --cpus=0.5 -v "${BASE_PATH}:/app"  gcc:latest bash -c "g++ /app/${codeFile} -o /app/${execFile} && timeout 3s /usr/bin/time -v /app/${execFile} < /app/${inputFile} > /app/${outputFile} 2> ${timeLog}"`;
 
     case "java":
       return `timeout 3s docker run --rm --memory=256m --cpus=0.5 -v "${BASE_PATH}:/app" openjdk:17 bash -c "javac /app/${codeFile} && /usr/bin/time -v java -cp /app ${javaClassName} < /app/${inputFile} > /app/${outputFile} 2> ${timeLog}"`;
