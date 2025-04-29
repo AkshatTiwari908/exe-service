@@ -1,0 +1,17 @@
+# Use the base GCC image
+FROM gcc:latest
+
+# Update and install 'time' utility with --fix-missing
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends time --fix-missing && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set the working directory
+WORKDIR /app
+
+# Copy your code into the image
+COPY . /app
+
+# Default command: Bash
+CMD ["bash"]

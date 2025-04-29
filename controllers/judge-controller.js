@@ -10,6 +10,10 @@ const cleanup = (files) => {
   files.forEach(file => {
     if (fs.existsSync(file)) fs.unlinkSync(file);
   });
+
+  // Remove all .class files
+  const classFiles = fs.readdirSync(BASE_PATH).filter(file => file.endsWith('.class'));
+  classFiles.forEach(file => fs.unlinkSync(path.join(BASE_PATH, file)));
 };
 
 const getJavaClassName = (code) => {
@@ -46,17 +50,14 @@ const getDockerCommand = (language, timestamp, codeFile, inputFile, outputFile, 
 
   switch (language) {
     case "python":
-      return `timeout 3s docker run --rm --volumes-from ${containerID} python:3.9 bash -c "python3 /app/${codeFile} < /app/${inputFile} > /app/${outputFile}"`;
+      return `docker run --rm --volumes-from ${containerID} python:3.9 bash -c "timeout 3s python3 /app/${codeFile} < /app/${inputFile} > /app/${outputFile}"`;
 
     case "cpp":
-      return `docker run --rm --volumes-from ${containerID} gcc:latest bash -c "apt update && apt install -y time && g++ /app/${codeFile} -o /app/${execFile} && timeout 3s /usr/bin/time -v /app/${execFile} < /app/${inputFile} > /app/${outputFile} 2> ${timeLog}"`;
+      return `docker run --rm --volumes-from ${containerID} custom-gcc bash -c "timeout 3s g++ /app/${codeFile} -o /app/${execFile} && /usr/bin/time -v /app/${execFile} < /app/${inputFile} > /app/${outputFile} 2> ${timeLog}"`;
 
-    case "java":
-      return `timeout 3s docker run --rm --volumes-from ${containerID} openjdk:17 bash -c "javac /app/${codeFile} && /usr/bin/time -v java -cp /app ${javaClassName} < /app/${inputFile} > /app/${outputFile} 2> ${timeLog}"`;
+      case "java":
+        return `docker run --rm --volumes-from ${containerID} openjdk:17 bash -c "timeout 3s javac /app/${codeFile} && java -cp /app ${javaClassName} < /app/${inputFile} 2>&1 | tee /app/${outputFile}"`;
     
-    case "c":
-      return `docker run --rm --volumes-from ${containerID} gcc:latest bash -c "apt update && apt install -y time && gcc /app/${codeFile} -o /app/${execFile} && timeout 3s /usr/bin/time -v /app/${execFile} < /app/${inputFile} > /app/${outputFile} 2> ${timeLog}"`;
-
     default:
       return null;
   }
