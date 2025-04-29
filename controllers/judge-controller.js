@@ -53,6 +53,9 @@ const getDockerCommand = (language, timestamp, codeFile, inputFile, outputFile, 
 
     case "java":
       return `timeout 3s docker run --rm --volumes-from ${containerID} openjdk:17 bash -c "javac /app/${codeFile} && /usr/bin/time -v java -cp /app ${javaClassName} < /app/${inputFile} > /app/${outputFile} 2> ${timeLog}"`;
+    
+    case "c":
+      return `docker run --rm --volumes-from ${containerID} gcc:latest bash -c "apt update && apt install -y time && gcc /app/${codeFile} -o /app/${execFile} && timeout 3s /usr/bin/time -v /app/${execFile} < /app/${inputFile} > /app/${outputFile} 2> ${timeLog}"`;
 
     default:
       return null;
@@ -68,7 +71,7 @@ const submitCode = async (req, res) => {
 
 
 
-  const ext = language === "python" ? "py" : language === "cpp" ? "cpp" : "java";
+  const ext = language === "python" ? "py" : language === "cpp" ? "cpp" : language==="c"?"c":"java";
   const javaClassName = language === "java" ? getJavaClassName(code) : null;
   const codeFile = language === "java" ? `${javaClassName}.java` : `code_${timestamp}.${ext}`;
   const execFile = `exec_${timestamp}`;
