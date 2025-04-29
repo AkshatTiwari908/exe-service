@@ -1,0 +1,10 @@
+version: '3'
+services:
+  my-coding-api:
+    build: .
+    ports:
+      - "5001:5001"
+    volumes:
+      - .:/app  
+      - /var/run/docker.sock:/var/run/docker.sock 
+    command: node index.js  

@@ -1,4 +1,4 @@
-const { exec } = require("child_process");
+const { exec,execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
@@ -17,72 +17,56 @@ const getJavaClassName = (code) => {
   return match ? match[1] : "Main";
 };
 
-const getDockerCommand = (language, timestamp, codeFile, inputFile, outputFile, execFile, javaClassName) => {
+/* const getDockerCommand = (language, timestamp, codeFile, inputFile, outputFile, execFile, javaClassName) => {
   const timeLog = `/app/time_${timestamp}.log`;
 
   switch (language) {
     case "python":
-      return `timeout 3s docker run --rm --memory=256m --cpus=0.5 -v "${BASE_PATH}:/app" python:3.9 bash -c "/usr/bin/time -v python3 /app/${codeFile} < /app/${inputFile} > /app/${outputFile} 2> ${timeLog}"`;
+      return `docker run --rm -v "${BASE_PATH}:/app" python:3.9 bash -c "/usr/bin/time -v timeout 3s python3 /app/${codeFile} < /app/${inputFile} > /app/${outputFile} 2> ${timeLog}"`;
 
     case "cpp":
-      console.log(path.join(BASE_PATH, codeFile)); 
-      console.log(fs.existsSync(path.join(BASE_PATH, codeFile))); 
+      console.log(path.join(BASE_PATH, codeFile));
+      console.log(fs.existsSync(path.join(BASE_PATH, codeFile)));
 
-      return `docker run --rm --memory=256m --cpus=0.5 --user $(id -u):$(id -g) -v "${BASE_PATH}:/app" gcc:latest sh -c "apt update && apt install -y time && g++ /app/${codeFile} -o /app/${execFile} && timeout 3s /usr/bin/time -v /app/${execFile} < /app/${inputFile} > /app/${outputFile} 2> ${timeLog}"`;
+      return `docker run --rm --memory=256m --cpus=0.5 --user $(id -u):$(id -g) -v "${BASE_PATH}:/app" gcc:latest bash -c "apt update && apt install -y time && g++ /app/${codeFile} -o /app/${execFile} && /usr/bin/time -v timeout 3s /app/${execFile} < /app/${inputFile} > /app/${outputFile} 2> ${timeLog}"`;
 
     case "java":
-      return `timeout 3s docker run --rm --memory=256m --cpus=0.5 -v "${BASE_PATH}:/app" openjdk:17 bash -c "javac /app/${codeFile} && /usr/bin/time -v java -cp /app ${javaClassName} < /app/${inputFile} > /app/${outputFile} 2> ${timeLog}"`;
+      return `docker run --rm -v "${BASE_PATH}:/app" openjdk:17 bash -c "javac /app/${codeFile} && /usr/bin/time -v timeout 3s java -cp /app ${javaClassName} < /app/${inputFile} > /app/${outputFile} 2> ${timeLog}"`;
+
+    default:
+      return null;
+  }
+}; */
+
+
+
+const getDockerCommand = (language, timestamp, codeFile, inputFile, outputFile, execFile, javaClassName) => {
+  const timeLog = `/app/time_${timestamp}.log`;
+  const containerID = execSync("hostname").toString().trim(); // the API container's ID
+
+  switch (language) {
+    case "python":
+      return `timeout 3s docker run --rm --volumes-from ${containerID} python:3.9 bash -c "python3 /app/${codeFile} < /app/${inputFile} > /app/${outputFile}"`;
+
+    case "cpp":
+      return `docker run --rm --volumes-from ${containerID} gcc:latest bash -c "apt update && apt install -y time && g++ /app/${codeFile} -o /app/${execFile} && timeout 3s /usr/bin/time -v /app/${execFile} < /app/${inputFile} > /app/${outputFile} 2> ${timeLog}"`;
+
+    case "java":
+      return `timeout 3s docker run --rm --volumes-from ${containerID} openjdk:17 bash -c "javac /app/${codeFile} && /usr/bin/time -v java -cp /app ${javaClassName} < /app/${inputFile} > /app/${outputFile} 2> ${timeLog}"`;
 
     default:
       return null;
   }
 };
 
-const runCode = async (req, res) => {
-  const { language, code, input } = req.body;
-  const timestamp = Date.now();
 
-  const ext = language === "python" ? "py" : language === "cpp" ? "cpp" : "java";
-  const javaClassName = language === "java" ? getJavaClassName(code) : null;
-  const codeFile = language === "java" ? `${javaClassName}.java` : `code_${timestamp}.${ext}`;
-  const execFile = `exec_${timestamp}`;
-  const inputFile = `input_${timestamp}.txt`;
-  const outputFile = `output_${timestamp}.txt`;
 
-  const codePath = path.join(BASE_PATH ,codeFile);
-  const inputPath = path.join(BASE_PATH, inputFile);
-  const outputPath = path.join(BASE_PATH, outputFile);
-  const timePath = path.join(BASE_PATH, `time_${timestamp}.log`);
-
-  fs.writeFileSync(codePath, code);
-  fs.writeFileSync(inputPath, input || '');
-
-  const dockerCommand = getDockerCommand(language, timestamp, codeFile, inputFile, outputFile, execFile, javaClassName);
-  if (!dockerCommand) return res.status(400).json({ error: "Unsupported language" });
-
-  exec(dockerCommand, (error, stdout, stderr) => {
-    if (error) {
-      return res.status(500).json({ error: stderr || error.message });
-    }
-
-    const output = fs.existsSync(outputPath) ? fs.readFileSync(outputPath, 'utf-8') : '';
-    const timeLog = fs.existsSync(timePath) ? fs.readFileSync(timePath, 'utf-8') : '';
-
-    const timeMatch = /Elapsed \(wall clock\) time \(h:mm:ss or m:ss\): (.*)/.exec(timeLog);
-    const time = timeMatch ? timeMatch[1] : "Unknown";
-
-    const memoryMatch = /Maximum resident set size \(kbytes\): (\d+)/.exec(timeLog);
-    const memory = memoryMatch ? memoryMatch[1] : "Unknown";
-
-    cleanup([codePath, inputPath, outputPath, timePath, path.join(BASE_PATH, execFile), path.join(BASE_PATH, `${execFile}.class`)]);
-
-    res.json({ output, time, memory: `${memory} KB` });
-  });
-};
 
 const submitCode = async (req, res) => {
   const { language, code, testCases } = req.body;
   const timestamp = Date.now();
+
+
 
   const ext = language === "python" ? "py" : language === "cpp" ? "cpp" : "java";
   const javaClassName = language === "java" ? getJavaClassName(code) : null;
@@ -167,11 +151,11 @@ const submitCode = async (req, res) => {
     }
 
     // (Optional) Clean after each test case
-    // cleanup([inputPath, outputPath, timePath]);
+     cleanup([inputPath, outputPath, timePath]);
   }
 
   //Final cleanup
-  //cleanup([codePath, path.join(BASE_PATH, execFile), path.join(BASE_PATH, `${execFile}.class`)]);
+  cleanup([codePath, path.join(BASE_PATH, execFile), path.join(BASE_PATH, `${execFile}.class`)]);
 
   const message = passed === total ? "All test cases passed ✅" : `${passed} out of ${total} test cases passed ❌`;
 
@@ -182,4 +166,4 @@ const submitCode = async (req, res) => {
   });
 };
 
-module.exports = { runCode, submitCode };
+module.exports = {  submitCode };
